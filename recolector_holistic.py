@@ -5,7 +5,7 @@ import os
 import sys
 
 # --- CONFIGURACIÓN ---
-seña_a_grabar = "Dolor"
+seña_a_grabar = "L"
 repeticiones_objetivo = 30    
 frames_por_seña = 30 
 
@@ -19,7 +19,7 @@ mp_drawing = mp.solutions.drawing_utils
 cap = cv2.VideoCapture(0)
 
 def extraer_y_normalizar(resultados):
-    # (El código matemático se mantiene exactamente igual para proteger tu precisión)
+    # (El código matemático se mantiene exactamente igual para proteger la precisión)
     ref_x, ref_y, ref_z = 0.5, 0.5, 0.0
     escala = 1.0
     
