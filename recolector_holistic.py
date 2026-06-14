@@ -5,7 +5,8 @@ import os
 import sys
 
 # --- CONFIGURACIÓN ---
-seña_a_grabar = "L"
+nombre_usuario = "tu_nombre" #Aqui su nombre, ejemplo: "juan"
+seña_a_grabar = "palabra_a_grabar" #palabra que se va a grabar, ejemplo: "Hola", siempre iniciando con mayuscula y sin espacios, ejemplo: "BuenosDias" o "ComoEstas". No usar caracteres especiales ni acentos.
 repeticiones_objetivo = 30    
 frames_por_seña = 30 
 
@@ -133,7 +134,8 @@ while repeticion_actual < repeticiones_objetivo:
         
         if tecla == ord('g'):
             # Guardamos y avanzamos el contador
-            np.save(os.path.join(ruta_base, seña_a_grabar, f"{repeticion_actual}.npy"), secuencia_marcadore)
+            nombre_archivo = f"{nombre_usuario}_{repeticion_actual}.npy"
+            np.save(os.path.join(ruta_base, seña_a_grabar, nombre_archivo), secuencia_marcadore)
             print(f"Muestra {repeticion_actual+1} guardada.")
             repeticion_actual += 1 
             break 
