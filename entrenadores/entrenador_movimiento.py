@@ -21,9 +21,11 @@ mapa_etiquetas = {etiqueta: num for num, etiqueta in enumerate(palabras)}
 
 print("Cargando matrices en la memoria...")
 for palabra in palabras:
-    for repeticion in range(30):  # Tus 30 repeticiones por palabra
-        ruta_archivo = os.path.join(ruta_base, palabra, f"{repeticion}.npy")
-        if os.path.exists(ruta_archivo):
+    ruta_palabra = os.path.join(ruta_base, palabra)
+    # Leemos todos los archivos dentro de la carpeta de la palabra
+    for nombre_archivo in os.listdir(ruta_palabra):
+        if nombre_archivo.endswith(".npy"): # Nos aseguramos de que sea un numpy array
+            ruta_archivo = os.path.join(ruta_palabra, nombre_archivo)
             res = np.load(ruta_archivo)
             secuencias.append(res)
             etiquetas.append(mapa_etiquetas[palabra])
