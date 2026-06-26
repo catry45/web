@@ -5,9 +5,9 @@ from tensorflow.keras.models import load_model
 
 # --- 1. CARGAR EL CEREBRO ---
 # Cargamos los archivos binarios que fueron entrenados
-modelo = load_model('../modelos/modelo_lsm.keras')
+modelo = load_model('modelos/modelo_lsm.keras')
 
-# Tus 12 palabras en ESTRICTO ORDEN ALFABÉTICO (así las aprendió la IA)
+# 12 palabras en ESTRICTO ORDEN ALFABÉTICO (así las aprendió la IA)
 palabras = ['A', 'Ayudar', 'B', 'Bien', 'C', 'Comer', 'Dolor', 'Gracias', 'Hola', 'L', 'Mal', 'Por_favor']
 
 mp_holistic = mp.solutions.holistic
