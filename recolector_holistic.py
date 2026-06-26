@@ -71,7 +71,7 @@ print(f"Seña objetivo: '{seña_a_grabar}'")
 
 repeticion_actual = 0
 
-# Cambiamos for por while para controlar cuándo avanzamos
+# un ciclo while para controlar cuándo avanzamos
 while repeticion_actual < repeticiones_objetivo:
     
     # 1. PANTALLA DE ESPERA
