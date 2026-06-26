@@ -6,7 +6,7 @@ import sys
 
 # --- CONFIGURACIÓN ---
 nombre_usuario = "tu_nombre" #Aqui su nombre, ejemplo: "juan"
-seña_a_grabar = "palabra_a_grabar" #palabra que se va a grabar, ejemplo: "Hola", siempre iniciando con mayuscula y sin espacios, ejemplo: "BuenosDias" o "ComoEstas". No usar caracteres especiales ni acentos.
+seña_a_grabar = "palabra_a_grabar" #palabra que se va a grabar, ejemplo: "Hola", siempre iniciando con mayuscula y sin espacios, ejemplo: "Buenos_dias" o "Como_estas". No usar caracteres especiales ni acentos.
 repeticiones_objetivo = 30    
 frames_por_seña = 30 
 
