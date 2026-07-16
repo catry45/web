@@ -3,19 +3,21 @@ import numpy as np
 import mediapipe as mp
 from tensorflow.keras.models import load_model
 
-# --- 1. CARGAR EL CEREBRO ---
-# Cargamos los archivos binarios que fueron entrenados
-modelo = load_model('modelos/modelo_lsm.keras')
+# --- 1. CARGAR LOS CEREBROS ---
+print("Cargando IAs en la memoria...")
+modelo_lstm = load_model('modelos/modelo_lsm.keras')
+modelo_estatico = load_model('modelos/modelo_lsm_estatico.keras')
 
-# 12 palabras en ESTRICTO ORDEN ALFABÉTICO (así las aprendió la IA)
-palabras = ['A', 'Ayudar', 'B', 'Bien', 'C', 'Comer', 'Dolor', 'Gracias', 'Hola', 'L', 'Mal', 'Por_favor']
+# EL LSTM SOLO CONOCE 8 PALABRAS (Dinámicas)
+palabras_lstm = ['Ayudar', 'Bien', 'Comer', 'Dolor', 'Gracias', 'Hola', 'Mal', 'Por_favor']
+# El Estático conoce estas 4 (Estáticas)
+letras_estaticas = ['A', 'B', 'C', 'L']
 
 mp_holistic = mp.solutions.holistic
 mp_drawing = mp.solutions.drawing_utils
 
 # --- 2. EXTRACCIÓN ---
 def extraer_y_normalizar(resultados):
-    # (El código matemático se mantiene exactamente igual para proteger la precisión)
     ref_x, ref_y, ref_z = 0.5, 0.5, 0.0
     escala = 1.0
     
@@ -61,10 +63,11 @@ def extraer_y_normalizar(resultados):
 
     return np.concatenate([pose, face, lh, rh])
 
-# --- 3. MEMORIA A CORTO PLAZO ---
-secuencia = [] # Aquí se guardan los últimos 30 fotogramas que la IA usará para entender qué palabra estás haciendo 
-historial_predicciones = [] # Guarda las últimas 15 predicciones para evitar que la IA se vuelva loca con un movimiento raro
-oracion = "" # Aquí se guardará la palabra final que se muestra en pantalla (ej. "Hola", "Gracias", etc.)
+# --- 3. MEMORIA Y OPTIMIZACIÓN ---
+secuencia = [] 
+historial_predicciones = [] 
+oracion = "" 
+frame_contador = 0 
 
 # --- 4. ENCENDER LA CÁMARA ---
 cap = cv2.VideoCapture(0)
@@ -72,55 +75,59 @@ with mp_holistic.Holistic(min_detection_confidence=0.5, min_tracking_confidence=
     while cap.isOpened():
         ret, frame = cap.read()
         if not ret: break
+        frame = cv2.flip(frame, 1)
+        frame_contador += 1 
 
-        # Leer la imagen con MediaPipe
         image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         resultados = holistic.process(image)
         image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
         
-        # Dibujar los puntos en pantalla para que te veas
         mp_drawing.draw_landmarks(image, resultados.pose_landmarks, mp_holistic.POSE_CONNECTIONS)
         mp_drawing.draw_landmarks(image, resultados.left_hand_landmarks, mp_holistic.HAND_CONNECTIONS)
         mp_drawing.draw_landmarks(image, resultados.right_hand_landmarks, mp_holistic.HAND_CONNECTIONS)
 
-        # Extraer las coordenadas matemáticas
         keypoints = extraer_y_normalizar(resultados)
         secuencia.append(keypoints)
-
-        # Efecto "Ventana Deslizante": Solo conservamos los últimos 30 fotogramas
         secuencia = secuencia[-30:]
 
-        # --- LA MAGIA DE LA PREDICCIÓN ---
-        # Si ya tenemos 30 fotogramas acumulados, le preguntamos al modelo
-        # --- LA MAGIA DE LA PREDICCIÓN CON FILTRO ---
-        if len(secuencia) == 30:
-            prediccion = modelo.predict(np.expand_dims(secuencia, axis=0), verbose=0)[0]
-            indice_ganador = np.argmax(prediccion)
+        # --- FUSIÓN DE IAs + OPTIMIZACIÓN DE RENDIMIENTO ---
+        # Evaluamos cada 2 fotogramas (súper rápido y sin colapsar el procesador)
+        if frame_contador % 2 == 0:
             
-            # Guardamos esta predicción en el historial
-            historial_predicciones.append(indice_ganador)
+            # 1. EVALUACIÓN ESTÁTICA
+            pred_estatica = modelo_estatico.predict(np.expand_dims(keypoints, axis=0), verbose=0)[0]
+            idx_estatico = np.argmax(pred_estatica)
             
-            # Mantenemos el historial siempre en 15 predicciones máximo
-            historial_predicciones = historial_predicciones[-15:]
-            
-            # FILTRO: ¿La predicción actual es la más común en el historial?
-            # Contamos cuántas veces ha salido esta palabra en los últimos 15 intentos
-            conteo_ganador = historial_predicciones.count(indice_ganador)
-            
-            # Si la IA está más del 70% segura Y esta palabra se ha repetido al menos 10 veces en el historial
-            if prediccion[indice_ganador] > 0.70 and conteo_ganador > 10:
-                nueva_palabra = palabras[indice_ganador]
+            # Exigimos 90% de seguridad para evitar falsos positivos
+            if pred_estatica[idx_estatico] > 0.90:
+                nueva_palabra = letras_estaticas[idx_estatico]
+                historial_predicciones.append(nueva_palabra)
                 
-                # Solo actualizamos si es diferente para evitar parpadeos
-                if oracion != nueva_palabra:
-                    oracion = nueva_palabra
-        # Mostrar el resultado final en la pantalla
+            # 2. EVALUACIÓN DINÁMICA
+            elif len(secuencia) == 30:
+                pred_lstm = modelo_lstm.predict(np.expand_dims(secuencia, axis=0), verbose=0)[0]
+                idx_lstm = np.argmax(pred_lstm)
+                
+                # Exigimos 65% para movimientos
+                if pred_lstm[idx_lstm] > 0.65:
+                    nueva_palabra = palabras_lstm[idx_lstm]
+                    historial_predicciones.append(nueva_palabra)
+
+            # --- FILTRO DE ESTABILIZACIÓN RÁPIDA ---
+            historial_predicciones = historial_predicciones[-8:] # Solo los últimos 8 intentos
+            if len(historial_predicciones) > 0:
+                palabra_mas_comun = max(set(historial_predicciones), key=historial_predicciones.count)
+                conteo = historial_predicciones.count(palabra_mas_comun)
+                
+                # Solo pedimos 4 coincidencias rápidas para mostrar la palabra en pantalla
+                if conteo >= 4 and oracion != palabra_mas_comun:
+                    oracion = palabra_mas_comun
+
         cv2.rectangle(image, (0,0), (640, 40), (245, 117, 16), -1)
         cv2.putText(image, f"Traduccion: {oracion}", (10,30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
 
         cv2.imshow('Traductor LSM en Vivo', image)
         
-        # Presiona 'q' para salir
         if cv2.waitKey(10) & 0xFF == ord('q'):
             break
 
