@@ -1,19 +1,24 @@
 # 🤟 Traductor de Lenguaje de Señas en Tiempo Real
 
-Prototipo de software diseñado para la traducción e inclusión social mediante Inteligencia Artificial y Visión Artificial. Desarrollado para el Concurso de Prototipos.
+Prototipo de software diseñado para la traducción e inclusión social mediante Inteligencia Artificial y Visión Computacional. Desarrollado para el Concurso de Prototipos del CBTIS 212.
 
 ## 🚀 Características del Proyecto
-* **Procesamiento Eficiente:** Mapeo de articulaciones mediante puntos de control (*landmarks*).
-* **Bajo Costo:** Funciona en hardware convencional utilizando cámaras web estándar sin necesidad de GPUs dedicadas.
-* **Enfoque de Inclusión:** Orientado a reducir la brecha de comunicación con la comunidad sordomuda.
+* **Procesamiento Eficiente:** Extracción y normalización matemática de articulaciones mediante *landmarks* de MediaPipe Holistic.
+* **Arquitectura Robusta:** Implementación de redes neuronales recurrentes (LSTM) con `EarlyStopping` para prevenir el sobreajuste.
+* **Bajo Costo y Escalabilidad:** Funciona en hardware convencional utilizando cámaras web estándar, procesando inferencias a 30 FPS.
 
 ## 🛠️ Stack Tecnológico
 * **Lenguaje:** Python 3.11+
-* **Visión Artificial:** Google MediaPipe & OpenCV
-* **Inteligencia Artificial:** Scikit-Learn (Clasificadores Densos)
+* **Visión Artificial:** OpenCV & Google MediaPipe Holistic
+* **Inteligencia Artificial:** TensorFlow & Keras (Modelos LSTM y Dense)
+* **Control de Versiones:** Git & GitHub
 
 ## 📁 Estado del Prototipo
-Actualmente en **Fase 1 (Configuración e Infraestructura de Datos)**.
-- [x] Configuración del entorno profesional y control de versiones.
-- [ ] Desarrollo del script de captura visual de landmarks.
-- [ ] Recolección del dataset local.
+Actualmente en **Fase 2 (Entrenamiento e Inferencia Dinámica)**.
+- [x] Configuración del entorno y control de versiones.
+- [x] Desarrollo del motor de captura holística y normalización de datos.
+- [x] Recolección de dataset colaborativo (120 muestras por clase).
+- [x] Entrenamiento del modelo LSTM (Precisión de validación: 98.15%).
+- [x] Traducción en tiempo real mediante ventana deslizante.
+- [ ] Implementación de "Comité de Expertos" (IA Estática + IA Dinámica).
+- [ ] Interfaz Gráfica de Usuario (GUI).
