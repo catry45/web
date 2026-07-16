@@ -26,12 +26,18 @@ ruta_modelo = os.path.join(directorio_script, '..', 'modelos', 'modelo_lsm.keras
 # --- 2. CARGA DE DATOS ---
 secuencias, etiquetas = [], []
 
-# Definir palabras basado en las carpetas encontradas
-palabras = np.array(sorted(os.listdir(ruta_base)))
-# Filtrar solo directorios (por si hay archivos basura en la carpeta)
+# Definir explícitamente las carpetas que corresponden a palabras de movimiento.
+palabras = ['Ayudar', 'Bien', 'Comer', 'Dolor', 'Gracias', 'Hola', 'Mal', 'Por_favor']
+
+# Filtrar solo las carpetas que realmente existen en el dataset.
 palabras = [p for p in palabras if os.path.isdir(os.path.join(ruta_base, p))]
 
-# Mapeamos cada palabra a un número de ID (ej. A=0, Ayudar=1, etc.)
+if not palabras: # Si no hay carpetas válidas, lanzamos un error claro
+    raise FileNotFoundError("No se encontraron carpetas de movimiento válidas en el dataset.")
+
+print(f"Entrenando solo con clases de movimiento: {palabras}")
+
+# Mapeamos cada palabra a un número de ID (ej. Ayudar=0, Bien=1, etc.)
 mapa_etiquetas = {etiqueta: num for num, etiqueta in enumerate(palabras)}
 
 print("Cargando matrices en la memoria...")
@@ -56,7 +62,7 @@ for palabra in palabras:
 X = np.array(secuencias)
 y = to_categorical(etiquetas).astype(int)
 
-# Dividimos los datos: 90% para que estudie, 10% para examen sorpresa (validación)
+# Dividimos los datos: 90% para que estudie, 10% para examen (validación)
 X_entrenamiento, X_prueba, y_entrenamiento, y_prueba = train_test_split(X, y, test_size=0.1)
 
 # --- 3. CONSTRUCCIÓN DEL CEREBRO (RED LSTM ROBUSTA) ---
@@ -69,7 +75,7 @@ modelo.add(BatchNormalization()) # ESTABILIZADOR 2
 
 modelo.add(LSTM(64, return_sequences=False, activation='tanh'))
 modelo.add(Dense(64, activation='relu')) # Capa oculta
-modelo.add(Dropout(0.2)) # Apagamos neuronas para evitar memorización
+modelo.add(Dropout(0.2)) # Apagamos neuronas para evitar memorización (sobreajuste)
 modelo.add(Dense(len(palabras), activation='softmax')) # Capa de decisión final
 
 modelo.compile(optimizer='Adam', loss='categorical_crossentropy', metrics=['categorical_accuracy'])
@@ -95,11 +101,12 @@ checkpoint = ModelCheckpoint(
 
 # Entrenamos con los callbacks activos
 modelo.fit(
-    X_entrenamiento, 
-    y_entrenamiento, 
-    epochs=150, 
-    validation_data=(X_prueba, y_prueba), 
-    callbacks=[parada_temprana, checkpoint]
+    X_entrenamiento, # Arreglos de entrenamiento
+    y_entrenamiento, # Etiquetas de entrenamiento
+    epochs=150, # Número de vueltas de entrenamiento
+    validation_data=(X_prueba, y_prueba), # Validación para medir desempeño
+    verbose=1, # Mostrar progreso en consola
+    callbacks=[parada_temprana, checkpoint] # Freno de seguridad y guardado automático
 )
 
 # --- 5. RESUMEN FINAL ---
