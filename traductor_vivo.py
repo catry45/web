@@ -1,22 +1,21 @@
 import cv2
 import numpy as np
 import mediapipe as mp
+import os
 from tensorflow.keras.models import load_model
 
-# --- 1. CARGAR LOS CEREBROS ---
+# --- 1. CARGA DE MODELOS ---
 print("Cargando IAs en la memoria...")
 modelo_lstm = load_model('modelos/modelo_lsm.keras')
 modelo_estatico = load_model('modelos/modelo_lsm_estatico.keras')
 
-# EL LSTM SOLO CONOCE 8 PALABRAS (Dinámicas)
 palabras_lstm = ['Ayudar', 'Bien', 'Comer', 'Dolor', 'Gracias', 'Hola', 'Mal', 'Por_favor']
-# El Estático conoce estas 4 (Estáticas)
 letras_estaticas = ['A', 'B', 'C', 'L']
 
 mp_holistic = mp.solutions.holistic
 mp_drawing = mp.solutions.drawing_utils
 
-# --- 2. EXTRACCIÓN ---
+# --- 2. EXTRACCION DE CARACTERISTICAS ---
 def extraer_y_normalizar(resultados):
     ref_x, ref_y, ref_z = 0.5, 0.5, 0.0
     escala = 1.0
@@ -63,73 +62,159 @@ def extraer_y_normalizar(resultados):
 
     return np.concatenate([pose, face, lh, rh])
 
-# --- 3. MEMORIA Y OPTIMIZACIÓN ---
+# --- 3. MEMORIA DEL PROCESO ---
 secuencia = [] 
 historial_predicciones = [] 
 oracion = "" 
 frame_contador = 0 
+historial_muneca_izq = [] 
+historial_muneca_der = [] 
 
-# --- 4. ENCENDER LA CÁMARA ---
+# NUEVO: Variables para estabilizar la decisión entre modelos (Histéresis)
+historial_estado_motor = []  # Guarda los últimos 10 estados (0=Estático, 1=Dinámico)
+motor_activo_actual = "Estático" # Estado inicial por defecto
+
+# --- 4. INICIO DE LA CÁMARA ---
 cap = cv2.VideoCapture(0)
+if not cap.isOpened():
+    print("❌ ERROR CRÍTICO: No se detectó ninguna cámara web conectada.")
+    print("Por favor, conecta una cámara, verifica los permisos y reinicia el programa.")
+    exit()
+else:
+    print("✅ Cámara conectada y lista.")
+    print("✅ Sistema de traducción operando. Presiona 'c' para corregir un error o 'q' para salir.")
+
 with mp_holistic.Holistic(min_detection_confidence=0.5, min_tracking_confidence=0.5) as holistic:
     while cap.isOpened():
-        ret, frame = cap.read()
-        if not ret: break
-        frame = cv2.flip(frame, 1)
-        frame_contador += 1 
-
-        image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        resultados = holistic.process(image)
-        image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-        
-        mp_drawing.draw_landmarks(image, resultados.pose_landmarks, mp_holistic.POSE_CONNECTIONS)
-        mp_drawing.draw_landmarks(image, resultados.left_hand_landmarks, mp_holistic.HAND_CONNECTIONS)
-        mp_drawing.draw_landmarks(image, resultados.right_hand_landmarks, mp_holistic.HAND_CONNECTIONS)
-
-        keypoints = extraer_y_normalizar(resultados)
-        secuencia.append(keypoints)
-        secuencia = secuencia[-30:]
-
-        # --- FUSIÓN DE IAs + OPTIMIZACIÓN DE RENDIMIENTO ---
-        # Evaluamos cada 2 fotogramas (súper rápido y sin colapsar el procesador)
-        if frame_contador % 2 == 0:
+            ret, frame = cap.read()
+            if not ret: break
             
-            # 1. EVALUACIÓN ESTÁTICA
-            pred_estatica = modelo_estatico.predict(np.expand_dims(keypoints, axis=0), verbose=0)[0]
-            idx_estatico = np.argmax(pred_estatica)
+            frame = cv2.flip(frame, 1)
+            frame_contador += 1 
+
+            image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            resultados = holistic.process(image)
+            image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
             
-            # Exigimos 90% de seguridad para evitar falsos positivos
-            if pred_estatica[idx_estatico] > 0.90:
-                nueva_palabra = letras_estaticas[idx_estatico]
-                historial_predicciones.append(nueva_palabra)
-                
-            # 2. EVALUACIÓN DINÁMICA
-            elif len(secuencia) == 30:
-                pred_lstm = modelo_lstm.predict(np.expand_dims(secuencia, axis=0), verbose=0)[0]
-                idx_lstm = np.argmax(pred_lstm)
-                
-                # Exigimos 65% para movimientos
-                if pred_lstm[idx_lstm] > 0.65:
-                    nueva_palabra = palabras_lstm[idx_lstm]
-                    historial_predicciones.append(nueva_palabra)
+            mp_drawing.draw_landmarks(image, resultados.pose_landmarks, mp_holistic.POSE_CONNECTIONS)
+            mp_drawing.draw_landmarks(image, resultados.left_hand_landmarks, mp_holistic.HAND_CONNECTIONS)
+            mp_drawing.draw_landmarks(image, resultados.right_hand_landmarks, mp_holistic.HAND_CONNECTIONS)
 
-            # --- FILTRO DE ESTABILIZACIÓN RÁPIDA ---
-            historial_predicciones = historial_predicciones[-8:] # Solo los últimos 8 intentos
-            if len(historial_predicciones) > 0:
-                palabra_mas_comun = max(set(historial_predicciones), key=historial_predicciones.count)
-                conteo = historial_predicciones.count(palabra_mas_comun)
+            keypoints = extraer_y_normalizar(resultados)
+            secuencia.append(keypoints)
+            secuencia = secuencia[-30:]
+
+            # --- CALCULO DEL MOVIMIENTO DE LA MANO ---
+            velocidad_maxima = 0.0
+            mano_detectada = False
+            vel_izq = 0.0
+            vel_der = 0.0
+            
+            if resultados.left_hand_landmarks:
+                mano_detectada = True
+                muneca_izq = np.array([resultados.left_hand_landmarks.landmark[0].x, resultados.left_hand_landmarks.landmark[0].y])
+                historial_muneca_izq.append(muneca_izq)
+                historial_muneca_izq = historial_muneca_izq[-5:]
+                if len(historial_muneca_izq) == 5:
+                    vel_izq = np.linalg.norm(historial_muneca_izq[-1] - historial_muneca_izq[0])
+                    if vel_izq > velocidad_maxima: velocidad_maxima = vel_izq
+            else:
+                historial_muneca_izq = []
+
+            if resultados.right_hand_landmarks:
+                mano_detectada = True
+                muneca_der = np.array([resultados.right_hand_landmarks.landmark[0].x, resultados.right_hand_landmarks.landmark[0].y])
+                historial_muneca_der.append(muneca_der)
+                historial_muneca_der = historial_muneca_der[-5:]
+                if len(historial_muneca_der) == 5:
+                    vel_der = np.linalg.norm(historial_muneca_der[-1] - historial_muneca_der[0])
+                    if vel_der > velocidad_maxima: velocidad_maxima = vel_der
+            else:
+                historial_muneca_der = []
+
+            # --- ESTABILIZACIÓN DEL MOTOR (Histéresis Asimétrica) ---
+            if mano_detectada:
+                estado_instantaneo = 0 if velocidad_maxima < 0.018 else 1
+                historial_estado_motor.append(estado_instantaneo)
+                historial_estado_motor = historial_estado_motor[-10:]
+
+                if len(historial_estado_motor) == 10:
+                    conteo_dinamico = sum(historial_estado_motor)
+                    if conteo_dinamico >= 4:
+                        motor_activo_actual = "Dinámico"
+                    elif conteo_dinamico <= 1:
+                        motor_activo_actual = "Estático"
+
+            # --- FUSION DE LAS IAs  CON CONTROL DE CONFIANZA ---
+            confianza_actual = 0.0 # Variable para el HUD
+            
+            if frame_contador % 2 == 0 and mano_detectada:
+                if motor_activo_actual == "Estático":
+                    pred_estatica = modelo_estatico.predict(np.expand_dims(keypoints, axis=0), verbose=0)[0]
+                    idx_estatico = np.argmax(pred_estatica)
+                    confianza_actual = pred_estatica[idx_estatico] # Capturamos la confianza
+                    
+                    if confianza_actual > 0.85:
+                        nueva_palabra = letras_estaticas[idx_estatico]
+                        historial_predicciones.append(nueva_palabra)
+                        
+                elif motor_activo_actual == "Dinámico" and len(secuencia) == 30:
+                    # Se puede validar que no sean datos vacíos antes de predecir
+                    pred_lstm = modelo_lstm.predict(np.expand_dims(secuencia, axis=0), verbose=0)[0]
+                    idx_lstm = np.argmax(pred_lstm)
+                    confianza_actual = pred_lstm[idx_lstm] # Capturamos la confianza
+                    
+                    if confianza_actual > 0.65:
+                        nueva_palabra = palabras_lstm[idx_lstm]
+                        historial_predicciones.append(nueva_palabra)
+
+                # --- FILTRO PARA ESTABILIZAR EL TEXTO (la traduccion) ---
+                historial_predicciones = historial_predicciones[-8:] 
+                if len(historial_predicciones) > 0:
+                    palabra_mas_comun = max(set(historial_predicciones), key=historial_predicciones.count)
+                    conteo = historial_predicciones.count(palabra_mas_comun)
+                    
+                    if conteo >= 4 and oracion != palabra_mas_comun:
+                        oracion = palabra_mas_comun
+
+            # --- MOSTRAR LA TRADUCCIÓN EN PANTALLA ---
+            cv2.rectangle(image, (0,0), (640, 40), (245, 117, 16), -1)
+            cv2.putText(image, f"Traduccion: {oracion}", (10,30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
+
+            cv2.putText(image, "Arquitectura: Hibrida (MoE)", (410, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
+            # Mostrar la confianza en vivo
+            cv2.putText(image, f"Confianza IA: {confianza_actual*100:.1f}%", (410, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 255, 255), 1)
+            
+            if mano_detectada:
+                color_motor = (0, 255, 255) if motor_activo_actual == "Estático" else (0, 255, 0)
+                cv2.putText(image, f"Motor Activo: IA {motor_activo_actual.upper()}", (10, 65), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color_motor, 2)
+
+            cv2.imshow('Traductor LSM en Vivo', image)
+            
+            tecla = cv2.waitKey(10) & 0xFF
+            
+            # --- MODO DE CORRECCIÓN ---
+            if tecla == ord('c'):
+                print("\n[MODO CORRECCIÓN ACTIVADO]")
+                print(f"La IA tradujo erróneamente: '{oracion}'")
+                palabra_correcta = input("Escribe la palabra CORRECTA (respetando mayúsculas/guiones): ")
                 
-                # Solo pedimos 4 coincidencias rápidas para mostrar la palabra en pantalla
-                if conteo >= 4 and oracion != palabra_mas_comun:
-                    oracion = palabra_mas_comun
-
-        cv2.rectangle(image, (0,0), (640, 40), (245, 117, 16), -1)
-        cv2.putText(image, f"Traduccion: {oracion}", (10,30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
-
-        cv2.imshow('Traductor LSM en Vivo', image)
-        
-        if cv2.waitKey(10) & 0xFF == ord('q'):
-            break
+                if palabra_correcta in palabras_lstm or palabra_correcta in letras_estaticas:
+                    ruta_carpeta = f"dataset_lsm_holistic/{palabra_correcta}"
+                    os.makedirs(ruta_carpeta, exist_ok=True)
+                    
+                    num_archivos = len([name for name in os.listdir(ruta_carpeta) if name.startswith("correccion_")])
+                    ruta_guardado = f"{ruta_carpeta}/correccion_{num_archivos}.npy"
+                    
+                    # Guardamos una copia de la secuencia para entrenar después
+                    np.save(ruta_guardado, np.array(secuencia)) 
+                    print(f"✅ ¡Dato guardado en {ruta_guardado}! La IA lo estudiará en el próximo reentrenamiento.")
+                else:
+                    print("❌ Palabra no reconocida en el diccionario. Corrección cancelada.")
+                print("Reanudando cámara...\n")
+            
+            elif tecla == ord('q'):
+                break
 
 cap.release()
 cv2.destroyAllWindows()
