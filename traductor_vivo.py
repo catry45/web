@@ -166,15 +166,23 @@ with mp_holistic.Holistic(min_detection_confidence=0.5, min_tracking_confidence=
                     historial_predicciones.append(nueva_palabra)
 
             # --- FILTRO DE ESTABILIZACIÓN DE TEXTO ---
-            historial_predicciones = historial_predicciones[-8:] 
-            if len(historial_predicciones) > 0:
+            historial_predicciones = historial_predicciones[-6:] 
+            
+            # Solo evaluamos si la memoria está llena
+            if len(historial_predicciones) == 6:
                 palabra_mas_comun = max(set(historial_predicciones), key=historial_predicciones.count)
                 conteo = historial_predicciones.count(palabra_mas_comun)
                 
+                # La IA debe predecir la misma palabra en 4 de los últimos 6 frames.
+                # Esto asegura que el movimiento maduró y no es una transición a medias.
                 if conteo >= 4 and oracion != palabra_mas_comun:
-                    oracion = palabra_mas_comun
+                    oracion = palabra_mas_comun # Actualizamos la oración traducida
+            
+            # Limpiador de basura: Si no hay mano o la IA duda mucho, borramos el historial
+            if not mano_detectada or confianza_actual < 0.50:
+                historial_predicciones = []
 
-        # --- HUD PROFESIONAL ---
+        # --- HUD ---
         cv2.rectangle(image, (0,0), (640, 40), (245, 117, 16), -1)
         cv2.putText(image, f"Traduccion: {oracion}", (10,30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2, cv2.LINE_AA)
 
@@ -189,7 +197,7 @@ with mp_holistic.Holistic(min_detection_confidence=0.5, min_tracking_confidence=
         
         tecla = cv2.waitKey(10) & 0xFF
         
-        # --- MODO DE CORRECCIÓN (ACTIVE LEARNING) ---
+        # --- MODO DE CORRECCIÓN ---
         if tecla == ord('c'):
             print("\n" + "="*40)
             print("🛑 MODO CORRECCIÓN ACTIVADO")
@@ -198,16 +206,16 @@ with mp_holistic.Holistic(min_detection_confidence=0.5, min_tracking_confidence=
             palabra_correcta = input("Escribe la palabra CORRECTA (respetando mayúsculas/guiones): ")
             
             if palabra_correcta in palabras_lstm or palabra_correcta in letras_estaticas:
-                # --- NUEVA LÓGICA DE CONFIRMACIÓN ---
+                # --- LÓGICA DE CONFIRMACIÓN ---
                 confirmacion = input(f"¿Estás seguro de guardar esta muestra como '{palabra_correcta}'? (s/n): ").strip().lower()
-                
+                # Si el usuario confirma, guardamos la secuencia en la carpeta correspondiente
                 if confirmacion == 's':
                     ruta_carpeta = f"dataset_lsm_holistic/{palabra_correcta}"
                     os.makedirs(ruta_carpeta, exist_ok=True)
-                    
+                    # Contar cuántos archivos de corrección ya existen para esa clase
                     num_archivos = len([name for name in os.listdir(ruta_carpeta) if name.startswith("correccion_")])
                     ruta_guardado = f"{ruta_carpeta}/correccion_{num_archivos}.npy"
-                    
+                    # Guardar la secuencia en un archivo .npy
                     np.save(ruta_guardado, np.array(secuencia)) 
                     print(f"✅ ¡Dato guardado en {ruta_guardado}! La IA lo estudiará en el próximo reentrenamiento.")
                 else:
@@ -218,6 +226,6 @@ with mp_holistic.Holistic(min_detection_confidence=0.5, min_tracking_confidence=
         
         elif tecla == ord('q'):
             break
-
+# --- 5. CERRAR CÁMARA ---
 cap.release()
 cv2.destroyAllWindows()
