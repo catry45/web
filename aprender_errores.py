@@ -4,7 +4,7 @@ import numpy as np
 from tensorflow.keras.models import load_model
 from tensorflow.keras.utils import to_categorical
 
-# --- CONFIGURACIÓN BÁSICA ---
+# --- CONFIGURACIÓN ---
 ruta_base = "dataset_lsm_holistic"
 historial_dir = "historial_errores"
 modelos = {
@@ -28,8 +28,14 @@ def reentrenar_modelo(tipo):
 
     try:
         modelo = load_model(ruta_modelo)
-        # --- EVALUACIÓN INICIAL DEL MODELO ---
-        print(f"✅ Modelo {tipo} cargado. Obteniendo métricas base...")
+        
+        # --- SOLUCIÓN ROBUSTA: Re-compilar el modelo para asegurar métricas estandarizadas ---
+        modelo.compile(
+            optimizer='adam', 
+            loss='categorical_crossentropy', 
+            metrics=['accuracy']
+        )
+        print(f"✅ Modelo {tipo} cargado y compilado correctamente.")
     except Exception as e:
         print(f"❌ ERROR CRÍTICO al cargar el modelo: {e}")
         return
@@ -46,7 +52,6 @@ def reentrenar_modelo(tipo):
     archivos_correccion_procesados = []
     hay_correcciones_nuevas = False
     
-    # --- RECOLECCIÓN DE DATOS DE ENTRENAMIENTO ---
     for clase in lista_clases:
         ruta_carpeta = os.path.join(ruta_base, clase)
         if not os.path.exists(ruta_carpeta): continue
@@ -81,14 +86,14 @@ def reentrenar_modelo(tipo):
         X = np.array(X)
         y_cat = to_categorical(y, num_classes=len(lista_clases))
         
-        # --- REVICION PREVIA Y GUARDADO SEGURO ---
         try:
             print("⚙️ Inyectando nuevo conocimiento (Ajuste Fino)...")
             
-            # Evaluamos la precisión antes del ajuste
-            _, precision_pre = modelo.evaluate(X, y_cat, verbose=0)
+            # Evaluación previa segura
+            eval_pre = modelo.evaluate(X, y_cat, verbose=0)
+            precision_pre = eval_pre[1] # El índice 1 corresponde a la 'accuracy' gracias a la compilación
             
-            # Ajuste fino del modelo
+            # Ajuste Fino (Fine-Tuning)
             historial = modelo.fit(X, y_cat, epochs=5, verbose=0) 
             precision_post = historial.history['accuracy'][-1]
             
@@ -96,7 +101,6 @@ def reentrenar_modelo(tipo):
             print(f"   - Precisión Base: {precision_pre*100:.2f}%")
             print(f"   - Precisión Nueva: {precision_post*100:.2f}%")
 
-            # Solo guardamos si la precisión no baja demasiado
             if precision_post >= (precision_pre - 0.02):
                 modelo.save(ruta_modelo)
                 print(f"✅ ¡Cerebro actualizado con éxito! Cambios guardados.")
@@ -106,8 +110,7 @@ def reentrenar_modelo(tipo):
                     shutil.move(ruta_origen, ruta_destino)
                 print(f"🧹 {len(archivos_correccion_procesados)} correcciones archivadas de forma segura.")
             else:
-                print(f"⚠️ ¡ALERTA! El reentrenamiento degradó el modelo. Se ha cancelado el guardado para proteger la IA.")
-                print(f"   Sugerencia: Revisa la calidad de las correcciones guardadas.")
+                print(f"⚠️ ¡ALERTA! El reentrenamiento degradó el modelo. Se ha cancelado el guardado.")
 
         except Exception as e:
             print(f"❌ ERROR al reentrenar o evaluar: {e}")
