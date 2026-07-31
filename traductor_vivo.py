@@ -211,14 +211,17 @@ with mp_holistic.Holistic(min_detection_confidence=0.5, min_tracking_confidence=
                 # Validación de la confirmación
                 if confirmacion == 's':
                     tipo_senia = "dinamica" if palabra_correcta in palabras_lstm else "estatica"
-                    # Crear la carpeta correspondiente si no existe
-                    ruta_carpeta = f"historial_errores/{palabra_correcta}"
+
+                    # Crear estructura:
+                    # historial_errores/estatica/L
+                    # historial_errores/dinamica/Gracias
+                    ruta_carpeta = os.path.join("historial_errores", tipo_senia, palabra_correcta)
                     os.makedirs(ruta_carpeta, exist_ok=True)
-                    # Guardar la muestra en un archivo .npy con marca de tiempo
+
                     fecha_hora = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
                     nombre_archivo = f"{tipo_senia}_{fecha_hora}.npy"
                     ruta_guardado = os.path.join(ruta_carpeta, nombre_archivo)
-                    # Guardar la secuencia completa si es dinámica, o solo los keypoints si es estática
+
                     muestra = secuencia if tipo_senia == "dinamica" else keypoints
                     np.save(ruta_guardado, np.array(muestra, dtype=np.float32))
 
