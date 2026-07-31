@@ -2,6 +2,7 @@ import cv2
 import numpy as np
 import mediapipe as mp
 import os
+import datetime
 from tensorflow.keras.models import load_model
 
 # --- 1. CARGAR LOS CEREBROS (COMITÉ DE EXPERTOS) ---
@@ -197,26 +198,30 @@ with mp_holistic.Holistic(min_detection_confidence=0.5, min_tracking_confidence=
         
         tecla = cv2.waitKey(10) & 0xFF
         
-        # --- MODO DE CORRECCIÓN ---
+        # --- MODO DE CORRECCIÓN (ACTIVE LEARNING) ---
         if tecla == ord('c'):
             print("\n" + "="*40)
             print("🛑 MODO CORRECCIÓN ACTIVADO")
             print("="*40)
             print(f"La IA tradujo erróneamente: '{oracion}'")
-            palabra_correcta = input("Escribe la palabra CORRECTA (respetando mayúsculas/guiones): ")
-            
+            palabra_correcta = input("Escribe la palabra CORRECTA (respetando mayúsculas/guiones): ").strip()
+
             if palabra_correcta in palabras_lstm or palabra_correcta in letras_estaticas:
-                # --- LÓGICA DE CONFIRMACIÓN ---
                 confirmacion = input(f"¿Estás seguro de guardar esta muestra como '{palabra_correcta}'? (s/n): ").strip().lower()
-                # Si el usuario confirma, guardamos la secuencia en la carpeta correspondiente
+
                 if confirmacion == 's':
-                    ruta_carpeta = f"dataset_lsm_holistic/{palabra_correcta}"
+                    tipo_senia = "dinamica" if palabra_correcta in palabras_lstm else "estatica"
+
+                    ruta_carpeta = f"historial_errores/{palabra_correcta}"
                     os.makedirs(ruta_carpeta, exist_ok=True)
-                    # Contar cuántos archivos de corrección ya existen para esa clase
-                    num_archivos = len([name for name in os.listdir(ruta_carpeta) if name.startswith("correccion_")])
-                    ruta_guardado = f"{ruta_carpeta}/correccion_{num_archivos}.npy"
-                    # Guardar la secuencia en un archivo .npy
-                    np.save(ruta_guardado, np.array(secuencia)) 
+
+                    fecha_hora = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                    nombre_archivo = f"{tipo_senia}_{fecha_hora}.npy"
+                    ruta_guardado = os.path.join(ruta_carpeta, nombre_archivo)
+
+                    muestra = secuencia if tipo_senia == "dinamica" else keypoints
+                    np.save(ruta_guardado, np.array(muestra, dtype=np.float32))
+
                     print(f"✅ ¡Dato guardado en {ruta_guardado}! La IA lo estudiará en el próximo reentrenamiento.")
                 else:
                     print("🗑️ Corrección descartada por el usuario.")
