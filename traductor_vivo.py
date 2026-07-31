@@ -189,13 +189,13 @@ with mp_holistic.Holistic(min_detection_confidence=0.5, min_tracking_confidence=
 
         cv2.putText(image, "Arquitectura: Hibrida (MoE)", (410, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
         cv2.putText(image, f"Confianza IA: {confianza_actual*100:.1f}%", (410, 35), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 255, 255), 1)
-        
+        # -- ESTADO DEL MOTOR --
         if mano_detectada:
             color_motor = (0, 255, 255) if motor_activo_actual == "Estático" else (0, 255, 0)
             cv2.putText(image, f"Motor Activo: IA {motor_activo_actual.upper()}", (10, 65), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color_motor, 2)
-
+            
         cv2.imshow('Traductor LSM en Vivo', image)
-        
+        # --- TECLA DE SALIDA O CORRECCIÓN ---
         tecla = cv2.waitKey(10) & 0xFF
         
         # --- MODO DE CORRECCIÓN (ACTIVE LEARNING) ---
@@ -217,11 +217,13 @@ with mp_holistic.Holistic(min_detection_confidence=0.5, min_tracking_confidence=
                     # historial_errores/dinamica/Gracias
                     ruta_carpeta = os.path.join("historial_errores", tipo_senia, palabra_correcta)
                     os.makedirs(ruta_carpeta, exist_ok=True)
-
+                    
+                    # Guardar la muestra con un nombre único basado en la fecha y hora
                     fecha_hora = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
                     nombre_archivo = f"{tipo_senia}_{fecha_hora}.npy"
                     ruta_guardado = os.path.join(ruta_carpeta, nombre_archivo)
 
+                    # Guardar la muestra correspondiente según el tipo de señal
                     muestra = secuencia if tipo_senia == "dinamica" else keypoints
                     np.save(ruta_guardado, np.array(muestra, dtype=np.float32))
 
@@ -231,7 +233,7 @@ with mp_holistic.Holistic(min_detection_confidence=0.5, min_tracking_confidence=
             else:
                 print("❌ Palabra no reconocida en el diccionario. Corrección cancelada.")
             print("Reanudando cámara...\n")
-        
+        # -- SALIDA DEL PROGRAMA ---
         elif tecla == ord('q'):
             break
 # --- 5. CERRAR CÁMARA ---
