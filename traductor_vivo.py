@@ -205,20 +205,20 @@ with mp_holistic.Holistic(min_detection_confidence=0.5, min_tracking_confidence=
             print("="*40)
             print(f"La IA tradujo erróneamente: '{oracion}'")
             palabra_correcta = input("Escribe la palabra CORRECTA (respetando mayúsculas/guiones): ").strip()
-
+            # Validación de la palabra ingresada
             if palabra_correcta in palabras_lstm or palabra_correcta in letras_estaticas:
                 confirmacion = input(f"¿Estás seguro de guardar esta muestra como '{palabra_correcta}'? (s/n): ").strip().lower()
-
+                # Validación de la confirmación
                 if confirmacion == 's':
                     tipo_senia = "dinamica" if palabra_correcta in palabras_lstm else "estatica"
-
+                    # Crear la carpeta correspondiente si no existe
                     ruta_carpeta = f"historial_errores/{palabra_correcta}"
                     os.makedirs(ruta_carpeta, exist_ok=True)
-
+                    # Guardar la muestra en un archivo .npy con marca de tiempo
                     fecha_hora = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
                     nombre_archivo = f"{tipo_senia}_{fecha_hora}.npy"
                     ruta_guardado = os.path.join(ruta_carpeta, nombre_archivo)
-
+                    # Guardar la secuencia completa si es dinámica, o solo los keypoints si es estática
                     muestra = secuencia if tipo_senia == "dinamica" else keypoints
                     np.save(ruta_guardado, np.array(muestra, dtype=np.float32))
 
