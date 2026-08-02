@@ -5,11 +5,21 @@ from tensorflow.keras.models import load_model
 from tensorflow.keras.utils import to_categorical
 
 # --- CONFIGURACIÓN ---
-ruta_base = "dataset_lsm_holistic"
-historial_dir = "historial_errores"
+directorio_backend = os.path.dirname(os.path.abspath(__file__))
+directorio_raiz = os.path.abspath(os.path.join(directorio_backend, ".."))
+
+ruta_base = os.path.join(directorio_raiz, "dataset_lsm_holistic")
+historial_dir = os.path.join(directorio_raiz, "historial_errores")
+
 modelos = {
-    "dinamico": {"path": "modelos/modelo_lsm.keras", "clases": ['Ayudar', 'Bien', 'Comer', 'Dolor', 'Gracias', 'Hola', 'Mal', 'Por_favor']},
-    "estatico": {"path": "modelos/modelo_lsm_estatico.keras", "clases": ['A', 'B', 'C', 'L']}
+    "dinamico": {
+        "path": os.path.join(directorio_raiz, "modelos", "modelo_lsm.keras"), 
+        "clases": ['Ayudar', 'Bien', 'Comer', 'Dolor', 'Gracias', 'Hola', 'Mal', 'Por_favor']
+    },
+    "estatico": {
+        "path": os.path.join(directorio_raiz, "modelos", "modelo_lsm_estatico.keras"), 
+        "clases": ['A', 'B', 'C', 'L']
+    }
 }
 
 # --- FUNCIONES ---

@@ -7,11 +7,14 @@ from tensorflow.keras.layers import LSTM, Dense, Dropout, BatchNormalization
 from tensorflow.keras.utils import to_categorical
 
 # --- 1. CONFIGURACIÓN ---
-# Esto obtiene la ruta absoluta de la carpeta donde vive este script
+# Esto obtiene la ruta de 'backend/entrenadores/'
 directorio_script = os.path.dirname(os.path.abspath(__file__))
 
-# Esto busca la carpeta 'dataset_lsm_holistic' subiendo un nivel desde 'entrenadores'
-ruta_base = os.path.join(directorio_script, '..', 'dataset_lsm_holistic')
+# Sube DOS niveles: sale de 'entrenadores' -> sale de 'backend' -> llega a la raíz
+directorio_raiz = os.path.abspath(os.path.join(directorio_script, '..', '..'))
+
+ruta_base = os.path.join(directorio_raiz, 'dataset_lsm_holistic')
+ruta_modelo = os.path.join(directorio_raiz, 'modelos', 'modelo_lsm.keras')
 
 print(f"Buscando el dataset en: {ruta_base}")
 
@@ -20,8 +23,6 @@ if not os.path.exists(ruta_base):
     print(f"¡ERROR! No se encontró la carpeta en: {ruta_base}")
     print("Asegúrate de que la carpeta se llame exactamente así y esté en la ruta correcta.")
     exit()
-
-ruta_modelo = os.path.join(directorio_script, '..', 'modelos', 'modelo_lsm.keras')
 
 # --- 2. CARGA DE DATOS ---
 secuencias, etiquetas = [], []

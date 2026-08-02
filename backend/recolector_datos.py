@@ -10,7 +10,11 @@ seña_a_grabar = "palabra_a_grabar" #palabra que se va a grabar, ejemplo: "Hola"
 repeticiones_objetivo = 30    
 frames_por_seña = 30 
 
-ruta_base = "dataset_lsm_holistic"
+# Rutas Dinámicas
+directorio_backend = os.path.dirname(os.path.abspath(__file__))
+directorio_raiz = os.path.abspath(os.path.join(directorio_backend, ".."))
+
+ruta_base = os.path.join(directorio_raiz, "dataset_lsm_holistic")
 os.makedirs(os.path.join(ruta_base, seña_a_grabar), exist_ok=True)
 
 mp_holistic = mp.solutions.holistic

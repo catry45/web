@@ -6,9 +6,15 @@ import datetime
 from tensorflow.keras.models import load_model
 
 # --- 1. CARGAR LOS CEREBROS (COMITÉ DE EXPERTOS) ---
+directorio_backend = os.path.dirname(os.path.abspath(__file__))
+directorio_raiz = os.path.abspath(os.path.join(directorio_backend, ".."))
+
 print("Cargando IAs en la memoria...")
-modelo_lstm = load_model('modelos/modelo_lsm.keras')
-modelo_estatico = load_model('modelos/modelo_lsm_estatico.keras')
+ruta_lstm = os.path.join(directorio_raiz, "modelos", "modelo_lsm.keras")
+ruta_estatico = os.path.join(directorio_raiz, "modelos", "modelo_lsm_estatico.keras")
+
+modelo_lstm = load_model(ruta_lstm)
+modelo_estatico = load_model(ruta_estatico)
 
 palabras_lstm = ['Ayudar', 'Bien', 'Comer', 'Dolor', 'Gracias', 'Hola', 'Mal', 'Por_favor']
 letras_estaticas = ['A', 'B', 'C', 'L']
@@ -215,7 +221,7 @@ with mp_holistic.Holistic(min_detection_confidence=0.5, min_tracking_confidence=
                     # Crear estructura:
                     # historial_errores/estatica/L
                     # historial_errores/dinamica/Gracias
-                    ruta_carpeta = os.path.join("historial_errores", tipo_senia, palabra_correcta)
+                    ruta_carpeta = os.path.join(directorio_raiz, "historial_errores", tipo_senia, palabra_correcta)
                     os.makedirs(ruta_carpeta, exist_ok=True)
                     
                     # Guardar la muestra con un nombre único basado en la fecha y hora

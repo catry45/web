@@ -3,7 +3,8 @@ import os
 
 # --- 1. CONFIGURACIÓN INICIAL ---
 ruta_script = os.path.dirname(os.path.abspath(__file__))
-ruta_base = os.path.join(ruta_script, "dataset_lsm_holistic")
+directorio_raiz = os.path.abspath(os.path.join(ruta_script, '..'))
+ruta_base = os.path.join(directorio_raiz, 'dataset_lsm_holistic')
 
 print("\n" + "="*50)
 print("🔍 INICIANDO AUDITORÍA DE DATOS LSM 🔍")

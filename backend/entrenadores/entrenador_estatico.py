@@ -8,8 +8,8 @@ from tensorflow.keras.utils import to_categorical
 
 # --- 1. CONFIGURACIÓN DINÁMICA ---
 directorio_script = os.path.dirname(os.path.abspath(__file__))
-ruta_base = os.path.join(directorio_script, '..', 'dataset_lsm_holistic')
-ruta_modelo = os.path.join(directorio_script, '..', 'modelos', 'modelo_lsm_estatico.keras')
+ruta_base = os.path.abspath(os.path.join(directorio_script, '..', '..', 'dataset_lsm_holistic'))
+ruta_modelo = os.path.abspath(os.path.join(directorio_script, '..', '..', 'modelos', 'modelo_lsm_estatico.keras')) # 
 
 palabras_estaticas = ['A', 'B', 'C', 'L'] # SOLO entrenaremos las letras estáticas
 print(f"Entrenando Especialista de Forma para: {palabras_estaticas}")
@@ -32,8 +32,8 @@ for palabra in palabras_estaticas:
         ruta_archivo = os.path.join(ruta_palabra, nombre_archivo)
         try:
             res = np.load(ruta_archivo)
-            # Tomamos los ÚLTIMOS 5 fotogramas 
-            for fotograma in res[12:18]:  # Ajusta según la longitud de tus secuencias
+            # Tomamos los fotogramas del 12 al 17 (6 fotogramas) para simular un "aumento de datos" y evitar sobreajuste
+            for fotograma in res[12:18]:  # Ajusta el rango según tus necesidades
                 secuencias_estaticas.append(fotograma)
                 etiquetas.append(mapa_etiquetas[palabra])
         except Exception as e:
