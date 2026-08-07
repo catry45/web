@@ -17,8 +17,8 @@ Prototipo de software diseñado para la traducción e inclusión social mediante
 Actualmente en **Fase 2 (Entrenamiento e Inferencia Dinámica)**.
 - [x] Configuración del entorno y control de versiones.
 - [x] Desarrollo del motor de captura holística y normalización de datos.
-- [x] Recolección de dataset colaborativo (120 muestras por clase).
-- [x] Entrenamiento del modelo LSTM (Precisión de validación: 98.15%).
+- [x] Recolección de dataset colaborativo (120 muestras minimas por clase).
+- [x] Entrenamiento de modelos de alta precisión (LSTM 98.15% y Estático).
 - [x] Traducción en tiempo real mediante ventana deslizante.
-- [ ] Implementación de "Comité de Expertos" (IA Estática + IA Dinámica).
-- [ ] Interfaz Gráfica de Usuario (GUI).
+- [x] Implementación de "Comité de Expertos" (IA Estática + IA Dinámica con histéresis).
+- [x] Desarrollo de la Interfaz Gráfica de Usuario (GUI con PyQt6).
