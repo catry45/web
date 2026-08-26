@@ -9,7 +9,9 @@ CONFIG_DEFAULT = {
     "personalizacion": {
         "fuente": "Arial",
         "tamano_letra": 18,
-        "tema": "Oscuro"
+        "tema": "Oscuro",
+        "mostrar_hud": False,
+        "mostrar_landmarks": False
     },
     "traduccion": {
         "modo_ia": "Híbrido (Auto MoE)",
