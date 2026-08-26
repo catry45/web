@@ -4,11 +4,10 @@ import logging
 
 # PyQt6 para la interfaz gráfica y la interacción con el usuario.
 from PyQt6.QtWidgets import (
-    QLabel, QMainWindow, QVBoxLayout,
-    QHBoxLayout, QWidget, QFrame, QInputDialog, QMessageBox,
-    QPushButton
+    QLabel, QMainWindow, QVBoxLayout, QHBoxLayout, 
+    QWidget, QFrame, QInputDialog, QPushButton
 )
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QImage, QPixmap, QFont
 
 # Importamos el administrador de configuración, ventanas y motores (hillos)
@@ -107,6 +106,11 @@ class TraductorLSM(QMainWindow):
         self.lbl_instrucciones.setStyleSheet("color: #7f849c; font-size: 12px; margin-top: 5px;")
         layout.addWidget(self.lbl_instrucciones, alignment=Qt.AlignmentFlag.AlignCenter)
 
+        # Indicador LED de Estado para el Active Learning
+        self.lbl_led = QLabel("⚫ Sistema de Captura en Espera")
+        self.lbl_led.setStyleSheet("color: #6c7086; font-size: 14px; font-weight: bold;")
+        layout.addWidget(self.lbl_led, alignment=Qt.AlignmentFlag.AlignCenter)
+
         # Footer (Historial y Ajustes)
         footer_layout = QHBoxLayout()
         self.btn_historial = QPushButton("📜 Historial")
@@ -126,6 +130,10 @@ class TraductorLSM(QMainWindow):
         # Propiedades de estado
         self.ultima_oracion_hablada = "Esperando..."
         self.historial_traducciones = []
+
+        # Configuración de la Barra de Estado
+        self.statusBar().setStyleSheet("background-color: #11111b; color: #a6adc8; font-size: 12px; font-weight: bold;")
+        self.statusBar().showMessage("✅ Interfaz lista. Esperando motores...", 5000)
 
         # --- INICIO DE MOTORES (HILOS) ---
         logging.info("Arrancando hilo de síntesis de voz (TTS)...")
@@ -153,19 +161,62 @@ class TraductorLSM(QMainWindow):
         """
         logging.info("Abriendo ventana de Historial de Sesión.")
         dialogo = VentanaHistorialExport(self.historial_traducciones, self)
+
+        # Conectamos la señal del diálogo a la barra de estado (5000 = 5 segundos)
+        dialogo.mensaje_estado.connect(lambda msg: self.statusBar().showMessage(msg, 5000))
+        # Ejecutamos el diálogo de forma modal
         dialogo.exec()
 
     def abrir_configuraciones(self):
         """
-        Abre la ventana de configuración, permitiendo al usuario ajustar parámetros de la aplicación.
+        Abre la ventana de configuración, Comparando el estado anterior y nuevo de los ajustes
+        mediante 'Dirty Checking' para emitir un feedback contextual preciso.
         """
         logging.info("Abriendo panel de Ajustes.")
+        
+        # 1. "FOTOGRAFÍA" INICIAL: Guardamos cómo estaba el sistema antes de abrir la ventana
+        config_anterior = ConfigManager.cargar_configuracion()
+        
         dialogo = VentanaConfiguracion(self)
+
         if dialogo.exec():
             logging.info("Nuevos ajustes guardados. Aplicando cambios a los hilos en vivo...")
+            
+            # 2. "FOTOGRAFÍA" NUEVA: Cargamos lo que el usuario acaba de guardar
             self.configuracion = ConfigManager.cargar_configuracion()
             self.aplicar_fuente_traduccion()
             self.hilo.actualizar_configuracion(self.configuracion)
+            
+            modo_actual = self.configuracion.get("traduccion", {}).get("modo_ia", "Híbrido (Auto MoE)")
+            self.lbl_arquitectura.setText(f"Arquitectura: {modo_actual}")
+            
+            # --- Patrón 'Dirty Checking' (Evaluación por Diferencias) ---
+            cambios_detectados = []
+            
+            # Comparamos diccionario por diccionario
+            if config_anterior.get("personalizacion") != self.configuracion.get("personalizacion"):
+                cambios_detectados.append("🎨 UI")
+                
+            if config_anterior.get("traduccion") != self.configuracion.get("traduccion"):
+                cambios_detectados.append("🧠 IA")
+                
+            if config_anterior.get("voces") != self.configuracion.get("voces"):
+                cambios_detectados.append("🗣️ Voz")
+                
+            # 3. ARMADO DINÁMICO DEL MENSAJE
+            if len(cambios_detectados) > 1:
+                # Si cambió más de una cosa, las unimos con comas (Ej: "🎨 UI, 🗣️ Voz")
+                areas = ", ".join(cambios_detectados)
+                mensaje_estado = f"⚙️ Ajustes múltiples aplicados: {areas}."
+            elif len(cambios_detectados) == 1:
+                # Si solo cambió una cosa
+                mensaje_estado = f"✅ Ajustes aplicados: {cambios_detectados[0]}."
+            else:
+                # Si el usuario le dio a 'Guardar' pero en realidad no movió nada
+                mensaje_estado = "ℹ️ No se detectaron cambios en la configuración."
+                
+            # Mostramos el mensaje exacto en la barra de estado (6s)
+            self.statusBar().showMessage(mensaje_estado, 6000)
 
     def actualizar_imagen(self, frame_cv):
         """
@@ -179,19 +230,32 @@ class TraductorLSM(QMainWindow):
 
     def actualizar_hud(self, oracion, confianza, motor):
         """
-        Actualiza la interfaz de usuario con la traducción actual, el nivel de confianza y el motor activo.
+        Actualiza la interfaz de usuario con la traducción actual, muestra el HUD técnico o no si el usuario desactivó la opción.
         También maneja la lógica de historial y síntesis de voz (TTS).
         """
+        # 1. La traducción principal SIEMPRE se muestra
         self.lbl_traduccion.setText(oracion)
-        self.lbl_confianza.setText(f"Confianza IA: {confianza*100:.1f}%")
-        color_motor = "#f9e2af" if motor == "Estático" else "#a6e3a1"
-        self.lbl_motor.setStyleSheet(f"color: {color_motor}; font-size: 14px; font-weight: bold;")
-        self.lbl_motor.setText(f"Motor Activo: IA {motor.upper()}")
 
-        modo_actual = self.configuracion["traduccion"]["modo_ia"]
-        self.lbl_arquitectura.setText(f"Arquitectura: {modo_actual}")
+        # 2. Consultar la configuración actual
+        mostrar_hud = self.configuracion.setdefault("personalizacion", {}).get("mostrar_hud", False)
 
-        # Historial y lógica de TTS
+        # 3. Control de visibilidad
+        # Esto es lo que realmente hace que los textos desaparezcan o aparezcan en pantalla
+        self.lbl_arquitectura.setVisible(mostrar_hud)
+        self.lbl_motor.setVisible(mostrar_hud)
+        self.lbl_confianza.setVisible(mostrar_hud)
+
+        # 4. Solo se gastan recursos del procesador en calcular y actualizar textos si están visibles
+        if mostrar_hud:
+            self.lbl_confianza.setText(f"Confianza IA: {confianza*100:.1f}%")
+            color_motor = "#f9e2af" if motor == "Estático" else "#a6e3a1"
+            self.lbl_motor.setStyleSheet(f"color: {color_motor}; font-size: 14px; font-weight: bold;")
+            self.lbl_motor.setText(f"Motor Activo: IA {motor.upper()}")
+
+            modo_actual = self.configuracion["traduccion"]["modo_ia"]
+            self.lbl_arquitectura.setText(f"Arquitectura: {modo_actual}")
+
+        # --- LÓGICA DE HISTORIAL Y TTS  ---
         if oracion != "Esperando..." and oracion != self.ultima_oracion_hablada:
             self.ultima_oracion_hablada = oracion
             hora_actual = datetime.datetime.now().strftime("%H:%M:%S")
@@ -199,6 +263,9 @@ class TraductorLSM(QMainWindow):
             
             logging.info(f"Nueva traducción detectada: {oracion} (Confianza: {confianza*100:.1f}%)")
             self.historial_traducciones.append(log_texto)
+
+            # Mostramos el mensaje en la barra de estado (4s)
+            self.statusBar().showMessage(f"📝 Traducción guardada: '{oracion}'", 4000)
 
             voces_cfg = self.configuracion.get("voces", {})
             if voces_cfg.get("activar_voz", True) and hasattr(self, "hilo_tts"):
@@ -221,10 +288,18 @@ class TraductorLSM(QMainWindow):
                 exito = self.hilo.guardar_muestra_correccion(palabra)
                 if exito:
                     logging.info(f"Muestra de corrección guardada exitosamente para la clase: {palabra}")
-                    QMessageBox.information(self, "Aprendizaje Activo", f"✅ Dato guardado para '{palabra}'.")
+                    # Cambia a verde y muestra el mensaje
+                    self.lbl_led.setStyleSheet("color: #a6e3a1; font-size: 14px; font-weight: bold;")
+                    self.lbl_led.setText(f"🟢 ¡Muestra guardada para '{palabra}'!")
                 else:
                     logging.warning(f"Fallo al guardar muestra de corrección para: {palabra} (frames insuficientes).")
-                    QMessageBox.warning(self, "Error", "⚠️ Faltan frames para guardar una seña dinámica.")
+                    # Cambia a rojo y advierte
+                    self.lbl_led.setStyleSheet("color: #f38ba8; font-size: 14px; font-weight: bold;")
+                    self.lbl_led.setText("🔴 Error: Faltan frames para seña dinámica.")
+                
+                # Regresa el LED a su estado neutral después de 3 segundos (3000 ms)
+                QTimer.singleShot(3000, lambda: self.lbl_led.setStyleSheet("color: #6c7086; font-size: 14px; font-weight: bold;"))
+                QTimer.singleShot(3000, lambda: self.lbl_led.setText("⚫ Sistema de Captura en Espera"))
 
     def closeEvent(self, event):
         """
