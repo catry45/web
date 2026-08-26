@@ -6,12 +6,18 @@ from PyQt6.QtWidgets import (
 )
 # Importamos herramientas para generar PDFs con formato A4 estándar y estilo de texto.
 from PyQt6.QtGui import QFont, QPdfWriter, QTextDocument, QPageSize
+from PyQt6.QtCore import pyqtSignal
 
 class VentanaHistorialExport(QDialog):
     """
     Ventana para revisar y guardar el historial de traducciones de la sesión.
     Permite exportar a TXT y PDF usando funcionalidades nativas de PyQt6.
     """
+
+    # Se declara la señal como un atributo de clase, es para enviar una señal
+    # de los cambios a "app_principal" y se muestre en la barra de estado
+    mensaje_estado = pyqtSignal(str)
+
     def __init__(self, historial_frases, parent=None):
         super().__init__(parent)
         # Guardamos la lista de traducciones que se han realizado en esta sesión.
@@ -103,6 +109,9 @@ class VentanaHistorialExport(QDialog):
                         f.write(f"[{idx}] {frase}\n")
 
                 QMessageBox.information(self, "Éxito", f"TXT exportado correctamente:\n{os.path.basename(ruta_archivo)}")
+                # Enviamos el nombre del archivo a la barra de estado ---
+                nombre_archivo = os.path.basename(ruta_archivo)
+                self.mensaje_estado.emit(f"📄 Historial exportado a TXT: {nombre_archivo}")
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"No se pudo guardar el archivo TXT:\n{str(e)}")
 
@@ -208,6 +217,9 @@ class VentanaHistorialExport(QDialog):
 
                 # Se muestra un mensaje de éxito al usuario.
                 QMessageBox.information(self, "Éxito", f"PDF exportado correctamente en formato A4:\n{os.path.basename(ruta_archivo)}")
+                # Enviamos el aviso a la barra de estado ---
+                nombre_archivo = os.path.basename(ruta_archivo)
+                self.mensaje_estado.emit(f"📕 Historial exportado a PDF: {nombre_archivo}")
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"No se pudo guardar el archivo PDF:\n{str(e)}")
 
@@ -227,3 +239,5 @@ class VentanaHistorialExport(QDialog):
         if confirmacion == QMessageBox.StandardButton.Yes:
             self.historial.clear()
             self.refrescar_vista_texto()
+            # Avisamos a la app principal que se limpió ---
+            self.mensaje_estado.emit("🗑️ Historial de la sesión borrado correctamente.")
