@@ -8,7 +8,7 @@ import threading
 from PyQt6.QtCore import QThread, pyqtSignal
 from tensorflow.keras.models import load_model # Se importa para cargar los modelos de IA entrenados para la traducción de señas.
 from frontend.dialogs.configuracion import ConfigManager
-
+from collections import deque
 
 # --- Hilo principal para capturar el video y ejecutar la detección en segundo plano ---
 class HiloVideo(QThread):
@@ -43,6 +43,7 @@ class HiloVideo(QThread):
         config_inicial = ConfigManager.cargar_configuracion()
         self.modo_ia = config_inicial["traduccion"]["modo_ia"]
         self.ventana_frames = config_inicial["traduccion"]["ventana_frames"]
+        self.mostrar_landmarks = config_inicial.get("personalizacion", {}).get("mostrar_landmarks", False)
 
 
     def actualizar_configuracion(self, configuracion):
@@ -52,6 +53,7 @@ class HiloVideo(QThread):
         with self.config_lock:
             self.modo_ia = configuracion["traduccion"]["modo_ia"]
             self.ventana_frames = configuracion["traduccion"]["ventana_frames"]
+            self.mostrar_landmarks = configuracion.get("personalizacion", {}).get("mostrar_landmarks", False)
 
 
     def extraer_y_normalizar(self, resultados):
@@ -179,10 +181,15 @@ class HiloVideo(QThread):
                 image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 resultados = holistic.process(image)
                 image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-                # Dibujamos los landmarks detectados para que el usuario vea cómo la IA está interpretando su seña.
-                mp_drawing.draw_landmarks(image, resultados.pose_landmarks, mp_holistic.POSE_CONNECTIONS)
-                mp_drawing.draw_landmarks(image, resultados.left_hand_landmarks, mp_holistic.HAND_CONNECTIONS)
-                mp_drawing.draw_landmarks(image, resultados.right_hand_landmarks, mp_holistic.HAND_CONNECTIONS)
+
+                # Extraemos la configuración del usuario
+                with self.config_lock:
+                    dibujar_puntos = self.mostrar_landmarks
+                # Solo dibuja si el usuario lo solicita
+                if dibujar_puntos:
+                    mp_drawing.draw_landmarks(image, resultados.pose_landmarks, mp_holistic.POSE_CONNECTIONS)
+                    mp_drawing.draw_landmarks(image, resultados.left_hand_landmarks, mp_holistic.HAND_CONNECTIONS)
+                    mp_drawing.draw_landmarks(image, resultados.right_hand_landmarks, mp_holistic.HAND_CONNECTIONS)
 
                 # Guardamos el frame actual como entrada del modelo y también como historial temporal para detectar movimiento.
                 keypoints = self.extraer_y_normalizar(resultados)
@@ -217,19 +224,26 @@ class HiloVideo(QThread):
                 else:
                     self.historial_muneca_der = [] # Si no se detecta la mano derecha, se reinicia el historial para evitar falsos positivos.
 
-                # --- HISTÉRESIS ASIMÉTRICA (Histéresis simple que ayuda a evitar que la clasificación cambie de un frame a otro por ruido de la cámara.) ---
+                # --- HISTÉRESIS ASIMÉTRICA (Cambio rapido / Liberación lenta) ---
                 if mano_detectada:
-                    # Si la velocidad es baja, se considera una seña estática; si es alta, se trata como dinámica.
-                    estado_instantaneo = 0 if velocidad_maxima < 0.03 else 1
+                    # 1. Hacemos el umbral un 33% más sensible (0.02 en vez de 0.03) para detectar micro-movimientos
+                    estado_instantaneo = 0 if velocidad_maxima < 0.02 else 1
                     self.historial_estado_motor.append(estado_instantaneo)
-                    self.historial_estado_motor = self.historial_estado_motor[-10:]
+                    
+                    # 2. Definimos una cola de tamaño fijo (6 frames para la histéresis)
+                    self.historial_estado_motor = deque(maxlen=6)
 
-                    # Se requiere un historial de 10 frames para tomar una decisión robusta sobre el tipo de motor activo.
-                    if len(self.historial_estado_motor) == 10:
+                    if len(self.historial_estado_motor) == 6:
                         conteo_dinamico = sum(self.historial_estado_motor)
-                        if conteo_dinamico >= 4: # Si al menos 4 de los últimos 10 frames indican movimiento, se considera que el motor activo es dinámico.
+                        
+                        # Cambio rapido: Si detecta movimiento en solo 2 de 6 frames, salta a Dinámico AL INSTANTE.
+                        # Esto elimina el lag inicial al arrancar la seña.
+                        if conteo_dinamico >= 2: 
                             self.motor_activo_actual = "Dinámico"
-                        elif conteo_dinamico <= 1: # Si 1 o menos frames indican movimiento, se considera que el motor activo es estático.
+                            
+                        # Liberación lenta: Para volver a Estático, exigimos que la mano esté COMPLETAMENTE quieta 
+                        # (0 movimiento en los últimos 6 frames). Esto evita el "parpadeo" a la mitad de una seña.
+                        elif conteo_dinamico == 0: 
                             self.motor_activo_actual = "Estático"
 
                 # Si el usuario forzó un modo específico desde la configuración, ese valor tiene prioridad.
