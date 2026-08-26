@@ -91,6 +91,20 @@ class VentanaConfiguracion(QDialog):
         self.slider_tamano.setRange(12, 36)
         self.slider_tamano.setValue(self.config["personalizacion"]["tamano_letra"])
         layout.addWidget(self.slider_tamano)
+
+        # Controles de Interfaz (Modo Usuario / Desarrollador) ---
+        layout.addWidget(QLabel("<br><b>Opciones de Visualización:</b>"))
+        
+        self.chk_mostrar_hud = QCheckBox("Mostrar HUD Técnico (Confianza, Motor, Arquitectura)")
+        # Por defecto False si no existe
+        self.chk_mostrar_hud.setChecked(self.config["personalizacion"].get("mostrar_hud", False))
+        layout.addWidget(self.chk_mostrar_hud)
+
+        self.chk_mostrar_landmarks = QCheckBox("Mostrar Puntos de Rastreo (MediaPipe Landmarks)")
+        # Por defecto False si no existe
+        self.chk_mostrar_landmarks.setChecked(self.config["personalizacion"].get("mostrar_landmarks", False))
+        layout.addWidget(self.chk_mostrar_landmarks)
+
         # Se agrega un espacio flexible al final para que los elementos se mantengan arriba y no se estiren innecesariamente.
         layout.addStretch()
 
@@ -295,6 +309,9 @@ class VentanaConfiguracion(QDialog):
         # Pestaña 1
         self.config["personalizacion"]["fuente"] = self.combo_fuentes.currentFont().family()
         self.config["personalizacion"]["tamano_letra"] = self.slider_tamano.value()
+        # Guardar estados visuales
+        self.config["personalizacion"]["mostrar_hud"] = self.chk_mostrar_hud.isChecked()
+        self.config["personalizacion"]["mostrar_landmarks"] = self.chk_mostrar_landmarks.isChecked()
 
         # Pestaña 2
         if self.rb_estatico.isChecked():
