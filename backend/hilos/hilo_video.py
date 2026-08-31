@@ -272,34 +272,39 @@ class HiloVideo(QThread):
                 else:
                     self.historial_muneca_der = [] # Si no se detecta la mano derecha, se reinicia el historial para evitar falsos positivos.
 
-                # --- HISTÉRESIS ASIMÉTRICA (Cambio rapido / Liberación lenta) ---
-                if mano_detectada:
-                    # 1. Hacemos el umbral un 33% más sensible (0.02 en vez de 0.03) para detectar micro-movimientos
-                    estado_instantaneo = 0 if velocidad_maxima < 0.02 else 1
-                    self.historial_estado_motor.append(estado_instantaneo)
-                    
-                    # 2. Definimos una cola de tamaño fijo (6 frames para la histéresis)
-                    self.historial_estado_motor = deque(maxlen=6)
-
-                    if len(self.historial_estado_motor) == 6:
-                        conteo_dinamico = sum(self.historial_estado_motor)
-                        
-                        # Cambio rapido: Si detecta movimiento en solo 2 de 6 frames, salta a Dinámico AL INSTANTE.
-                        # Esto elimina el lag inicial al arrancar la seña.
-                        if conteo_dinamico >= 2: 
-                            self.motor_activo_actual = "Dinámico"
-                            
-                        # Liberación lenta: Para volver a Estático, exigimos que la mano esté COMPLETAMENTE quieta 
-                        # (0 movimiento en los últimos 6 frames). Esto evita el "parpadeo" a la mitad de una seña.
-                        elif conteo_dinamico == 0: 
-                            self.motor_activo_actual = "Estático"
-
+                # --- HISTÉRESIS ASIMÉTRICA ADAPTATIVA (Vinculada al Slider) ---
                 # Si el usuario forzó un modo específico desde la configuración, ese valor tiene prioridad.
                 with self.config_lock:
                     modo_ia = self.modo_ia
                     umbral_filtro = self.ventana_frames
 
-                # Se determina qué motor usar según la configuración del usuario y el estado actual de la detección de movimiento.
+                if mano_detectada:
+                    # 1. Detectamos movimiento (0.02 es la sensibilidad a micro-movimientos)
+                    estado_instantaneo = 1 if velocidad_maxima > 0.02 else 0
+                    self.historial_estado_motor.append(estado_instantaneo)
+                    
+                    # 2. Recortamos la lista normal, sin borrarla.
+                    # Hacemos que la ventana de tiempo dependa del slider del usuario (umbral_filtro)
+                    # Limitamos a un máximo de 15 frames para evitar que el cambio de motor se sienta "laggeado" si el usuario pone 30.
+                    ventana_histeresis = min(15, umbral_filtro) 
+                    self.historial_estado_motor = self.historial_estado_motor[-ventana_histeresis:]
+
+                    # 3. Lógica Asimétrica basada en porcentajes
+                    if len(self.historial_estado_motor) == ventana_histeresis:
+                        conteo_dinamico = sum(self.historial_estado_motor)
+                        
+                        # Matemáticas para arrancar (Rápido): Si el ~30% de los frames tienen movimiento, salta a Dinámico.
+                        limite_arranque = max(2, int(ventana_histeresis * 0.30))
+                        
+                        # Matemáticas para frenar (Lento): Exigimos que haya 0 o máximo 1 frame de ruido para volver a Estático.
+                        limite_freno = 1 
+                        
+                        if conteo_dinamico >= limite_arranque: 
+                            self.motor_activo_actual = "Dinámico"
+                        elif conteo_dinamico <= limite_freno: 
+                            self.motor_activo_actual = "Estático"
+
+                # Override Manual de Motor desde Configuraciones
                 motor_a_usar = self.motor_activo_actual
                 if modo_ia == "Forzar Estático":
                     motor_a_usar = "Estático"
