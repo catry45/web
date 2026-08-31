@@ -197,6 +197,54 @@ class HiloVideo(QThread):
                 self.secuencia.append(keypoints)
                 self.secuencia = self.secuencia[-30:]
 
+                # --- FEEDBACK VISUAL SUTIL (EFECTO NEÓN DIFUMINADO) ---
+                # 1. Detectar manos considerando el "Efecto Espejo" de cv2.flip
+                mano_izq_pantalla = bool(resultados.right_hand_landmarks)
+                mano_der_pantalla = bool(resultados.left_hand_landmarks)
+
+                if mano_izq_pantalla or mano_der_pantalla:
+                    # A. Lienzo Negro Puro (Optimización de memoria en lugar de copiar la imagen completa)
+                    overlay = np.zeros_like(image)
+                    alto, ancho, _ = image.shape
+                    
+                    # B. Grosor base ancho (ej. 45 px) para dar espacio al difuminado
+                    grosor_base = 45 
+                    
+                    # C. Colores BGR más saturados para que resalten al difuminarse
+                    color_izq = (255, 255, 0)   # Cyan intenso
+                    color_der = (255, 0, 255)   # Magenta intenso
+                    color_mixto = (255, 128, 128) # Púrpura luminoso
+                    
+                    # D. Dibujamos franjas sólidas gruesas en los bordes del lienzo negro
+                    if mano_izq_pantalla and mano_der_pantalla:
+                        # Marco completo
+                        cv2.rectangle(overlay, (0, 0), (ancho, alto), color_mixto, grosor_base)
+                    else:
+                        if mano_izq_pantalla:
+                            cv2.rectangle(overlay, (0, 0), (grosor_base, alto), color_izq, -1)
+                        if mano_der_pantalla:
+                            cv2.rectangle(overlay, (ancho - grosor_base, 0), (ancho, alto), color_der, -1)
+                    
+                    # E. Sub-sampling (Bloom Effect)
+                    # 1. Achicamos el lienzo a 1/4 de su tamaño original.
+                    ancho_peq, alto_peq = ancho // 4, alto // 4
+                    overlay_peq = cv2.resize(overlay, (ancho_peq, alto_peq), interpolation=cv2.INTER_LINEAR)
+                    
+                    # 2. Desenfoque Gaussiano Severo (Blur)
+                    # El kernel (17, 17) define qué tan lejos viaja y se difumina la luz hacia el centro. 
+                    # Debe ser siempre un número impar. OpenCV lo procesa rapidísimo en C++ (es como funciona por debajo OpenCV).
+                    overlay_blur_peq = cv2.GaussianBlur(overlay_peq, (17, 17), 0)
+                    
+                    # 3. Estiramos la imagen difuminada de regreso a su tamaño original (640x480).
+                    # La interpolación lineal (INTER_LINEAR) crea un degradado ultra suave de forma muy rápida.
+                    overlay_blur = cv2.resize(overlay_blur_peq, (ancho, alto), interpolation=cv2.INTER_LINEAR)
+                    
+                    # F. Fusión Aditiva (Pantalla)
+                    # En lugar de hacer la imagen semitransparente, SUMAMOS la luz del desenfoque 
+                    # a la imagen original. El centro (negro = 0) no altera el video, pero los bordes brillan.
+                    # El 0.8 es la intensidad del brillo (80%).
+                    image = cv2.addWeighted(image, 1.0, overlay_blur, 0.8, 0)
+
                 # --- DIRECTOR DE ORQUESTA (se decide si la señal actual se interpreta como movimiento estático o dinámico)---
                 velocidad_maxima = 0.0
                 mano_detectada = False
