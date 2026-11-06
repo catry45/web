@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Traductor LSM | Prototipo en Vivo</title>
+  <meta name="description" content="Traductor de Lengua de Señas Mexicana en tiempo real" />
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+  
+  <!-- Custom styles -->
+  <link rel="stylesheet" href="css/styles.css">
+  
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            brand: {
+              50:  '#f0f9ff',
+              100: '#e0f2fe',
+              200: '#bae6fd',
+              300: '#7dd3fc',
+              400: '#38bdf8',
+              500: '#0ea5e9',
+              600: '#0284c7',
+              700: '#0369a1',
+              800: '#075985',
+              900: '#0c4a6e',
+            }
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen font-sans antialiased">
+
+  <!-- Header -->
+  <header class="border-b border-slate-800/80 bg-slate-950/80 backdrop-blur-md sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between h-16">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-500 to-cyan-400 flex items-center justify-center shadow-lg shadow-brand-500/20">
+            <span class="text-xl">🤟</span>
+          </div>
+          <div>
+            <h1 class="text-lg font-bold tracking-tight">Traductor LSM</h1>
+            <p class="text-xs text-slate-400 -mt-0.5">Prototipo en tiempo real</p>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-3">
+          <div id="statusBadge" class="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-800/80 text-xs font-medium">
+            <span id="statusDot" class="w-2 h-2 rounded-full bg-slate-500"></span>
+            <span id="statusText">Cámara apagada</span>
+          </div>
+          
+          <button id="btnTheme" class="p-2 rounded-lg hover:bg-slate-800 transition-colors" title="Cambiar tema">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main content -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-8">
+    
+    <!-- Grid principal -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+      <!-- Columna izquierda: Cámara -->
+      <div class="lg:col-span-7 space-y-4">
+        
+        <!-- Video container -->
+        <div class="relative rounded-2xl overflow-hidden bg-slate-900 border border-slate-800 shadow-2xl shadow-black/40">
+          
+          <!-- Overlay de guía -->
+          <div id="guideOverlay" class="absolute inset-0 z-10 flex flex-col items-center justify-center bg-slate-950/90 backdrop-blur-sm transition-opacity duration-300">
+            <div class="text-center px-6">
+              <div class="w-20 h-20 mx-auto mb-5 rounded-full bg-slate-800 flex items-center justify-center">
+                <svg class="w-10 h-10 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                </svg>
+              </div>
+              <h2 class="text-xl font-semibold mb-2">Activa la cámara</h2>
+              <p class="text-slate-400 text-sm max-w-xs mx-auto mb-6">
+                Necesitamos acceso a tu cámara para detectar las señas de LSM en tiempo real.
+              </p>
+              <button id="btnStartCamera" class="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-brand-500 hover:bg-brand-400 text-white font-semibold transition-all shadow-lg shadow-brand-500/25 hover:shadow-brand-400/30 active:scale-95">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                </svg>
+                Iniciar cámara
+              </button>
+            </div>
+          </div>
+
+          <!-- Video + Canvas -->
+          <div class="relative aspect-video bg-black">
+            <video id="webcam" class="absolute inset-0 w-full h-full object-cover mirror" playsinline autoplay muted></video>
+            <canvas id="overlay" class="absolute inset-0 w-full h-full pointer-events-none"></canvas>
+            
+            <!-- Indicador de FPS / estado -->
+            <div class="absolute top-3 left-3 flex items-center gap-2">
+              <div id="fpsBadge" class="px-2.5 py-1 rounded-lg bg-black/60 backdrop-blur text-xs font-mono text-slate-300 hidden">
+                -- FPS
+              </div>
+            </div>
+
+            <!-- Controles sobre el video -->
+            <div class="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2">
+              <button id="btnToggleCamera" class="hidden items-center gap-2 px-4 py-2.5 rounded-xl bg-red-500/90 hover:bg-red-500 text-white text-sm font-medium backdrop-blur transition-all active:scale-95">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z"/>
+                </svg>
+                Detener
+              </button>
+              
+              <button id="btnSwitchCamera" class="hidden p-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-white backdrop-blur transition-all" title="Cambiar cámara">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Instrucciones rápidas -->
+        <div class="rounded-xl bg-slate-900/60 border border-slate-800 p-4">
+          <h3 class="text-sm font-semibold text-slate-300 mb-2 flex items-center gap-2">
+            <svg class="w-4 h-4 text-brand-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            Cómo usarlo
+          </h3>
+          <ul class="text-sm text-slate-400 space-y-1.5">
+            <li class="flex gap-2"><span class="text-brand-400 font-medium">1.</span> Coloca tu mano a una distancia cómoda de la cámara</li>
+            <li class="flex gap-2"><span class="text-brand-400 font-medium">2.</span> Realiza la seña claramente (abecedario LSM)</li>
+            <li class="flex gap-2"><span class="text-brand-400 font-medium">3.</span> La letra detectada aparecerá automáticamente a la derecha</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Columna derecha: Resultados -->
+      <div class="lg:col-span-5 space-y-4">
+
+        <!-- Letra / palabra actual -->
+        <div class="rounded-2xl bg-gradient-to-br from-slate-900 to-slate-900/80 border border-slate-800 p-6 shadow-xl">
+          <div class="flex items-center justify-between mb-4">
+            <h2 class="text-sm font-semibold text-slate-400 uppercase tracking-wider">Detección actual</h2>
+            <div class="flex items-center gap-2">
+              <span id="motorBadge" class="text-xs font-mono px-2 py-0.5 rounded-md bg-slate-800 text-slate-500">—</span>
+              <span id="confidenceBadge" class="text-xs font-mono px-2 py-0.5 rounded-md bg-slate-800 text-slate-500">—</span>
+            </div>
+          </div>
+          
+          <div class="flex items-center justify-center min-h-[140px]">
+            <div id="currentPrediction" class="text-7xl sm:text-8xl font-bold tracking-tighter text-slate-700 select-none transition-all duration-200">
+              —
+            </div>
+          </div>
+          
+          <div class="mt-4 pt-4 border-t border-slate-800 flex items-center justify-between">
+            <span class="text-xs text-slate-500">Última actualización</span>
+            <span id="lastUpdate" class="text-xs font-mono text-slate-400">—</span>
+          </div>
+        </div>
+
+        <!-- Texto construido -->
+        <div class="rounded-2xl bg-slate-900 border border-slate-800 p-5 shadow-xl">
+          <div class="flex items-center justify-between mb-3">
+            <h2 class="text-sm font-semibold text-slate-400 uppercase tracking-wider">Texto traducido</h2>
+            <div class="flex gap-1.5">
+              <button id="btnClearText" class="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition-colors" title="Limpiar texto">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                </svg>
+              </button>
+              <button id="btnCopyText" class="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition-colors" title="Copiar texto">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+          
+          <div id="translatedText" class="min-h-[80px] max-h-40 overflow-y-auto text-2xl font-medium leading-relaxed tracking-wide text-slate-100 break-words">
+            <span class="text-slate-600 italic text-base">Las letras detectadas aparecerán aquí...</span>
+          </div>
+        </div>
+
+        <!-- Historial de detecciones -->
+        <div class="rounded-2xl bg-slate-900 border border-slate-800 p-5 shadow-xl">
+          <div class="flex items-center justify-between mb-3">
+            <h2 class="text-sm font-semibold text-slate-400 uppercase tracking-wider">Historial reciente</h2>
+            <button id="btnClearHistory" class="text-xs text-slate-500 hover:text-slate-300 transition-colors">Limpiar</button>
+          </div>
+          
+          <div id="historyList" class="flex flex-wrap gap-2 min-h-[48px]">
+            <span class="text-sm text-slate-600 italic">Aún no hay detecciones</span>
+          </div>
+        </div>
+
+        <!-- Stats rápidas -->
+        <div class="grid grid-cols-3 gap-3">
+          <div class="rounded-xl bg-slate-900/80 border border-slate-800 p-3 text-center">
+            <div id="statDetections" class="text-xl font-bold text-brand-400">0</div>
+            <div class="text-[11px] text-slate-500 uppercase tracking-wide mt-0.5">Detecciones</div>
+          </div>
+          <div class="rounded-xl bg-slate-900/80 border border-slate-800 p-3 text-center">
+            <div id="statLetters" class="text-xl font-bold text-cyan-400">0</div>
+            <div class="text-[11px] text-slate-500 uppercase tracking-wide mt-0.5">Letras</div>
+          </div>
+          <div class="rounded-xl bg-slate-900/80 border border-slate-800 p-3 text-center">
+            <div id="statSession" class="text-xl font-bold text-emerald-400">0:00</div>
+            <div class="text-[11px] text-slate-500 uppercase tracking-wide mt-0.5">Sesión</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer técnico -->
+    <footer class="mt-10 pt-6 border-t border-slate-800/60 text-center">
+      <p class="text-xs text-slate-500">
+        Prototipo TLS · Lengua de Señas Mexicana · 
+        <span class="text-slate-400">MediaPipe + TensorFlow</span>
+      </p>
+      <p class="text-[11px] text-slate-600 mt-1">
+        Esta interfaz está lista para conectarse con el backend Python del proyecto.
+      </p>
+    </footer>
+  </main>
+
+  <!-- Toast notifications -->
+  <div id="toastContainer" class="fixed bottom-6 right-6 z-50 flex flex-col gap-2"></div>
+
+  <!-- Scripts -->
+  <script src="js/app.js"></script>
+</body>
+</html>
